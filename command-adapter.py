@@ -35,45 +35,15 @@ def parse_args(argv):
 
     parser.add_argument('--messagingPort', dest="messagingPort", default="1883", \
                         help='The MQTT Port of the ClearBlade Platform or Edge the adapter will \
-                        connect to. The default is 1883.')
+                        connect to. The default is 1883.', type=int)
 
-    parser.add_argument('--adapterSettingsCollection', dest="adapterSettingsCollectionName", \
-                        default="", \
-                        help='The name of the ClearBlade Platform data collection which contains \
-                        runtime configuration settings for the adapter. The default is "".')
-
-    parser.add_argument('--adapterSettingsItem', dest="adapterSettingsItemID", default="", \
-                        help='The "item_id" of the row, within the ClearBlade Platform data \
-                        collection which contains runtime configuration settings, that should \
-                        be used to configure the adapter. The default is "".')
-
-    parser.add_argument('--requestTopicRoot', dest="requestTopicRoot", default="edge/command", \
+    parser.add_argument('--requestTopicRoot', dest="requestTopicRoot", default="edge/command/request", \
                         help='The root of MQTT topics this adapter will subscribe and publish to. \
-                        The default is "edge/command".')
+                        The default is "edge/command/request".')
 
-    parser.add_argument('--responseTopicRoot', dest="responseTopicRoot", default="edge/command", \
+    parser.add_argument('--responseTopicRoot', dest="responseTopicRoot", default="edge/command/response", \
                         help='The root of MQTT topics this adapter will subscribe and publish to. \
-                        The default is "edge/response".')
-
-    parser.add_argument('--deviceProvisionSvc', dest="deviceProvisionSvc", default="", \
-                        help='The name of a service that can be invoked to provision IoT devices \
-                        within the ClearBlade Platform or Edge. The default is "".')
-
-    parser.add_argument('--deviceHealthSvc', dest="deviceHealthSvc", default="", \
-                        help='The name of a service that can be invoked to provide the health of \
-                        an IoT device to the ClearBlade Platform or Edge. The default is "".')
-
-    parser.add_argument('--deviceLogsSvc', dest="deviceLogsSvc", default="", \
-                        help='The name of a service that can be invoked to provide IoT device \
-                        logging information to the ClearBlade Platform or Edge. The default is "".')
-
-    parser.add_argument('--deviceStatusSvc', dest="deviceStatusSvc", default="", \
-                        help='The name of a service that can be invoked to provide the status of \
-                        an IoT device to the ClearBlade Platform or Edge. The default is "".')
-
-    parser.add_argument('--deviceDecommissionSvc', dest="deviceDecommissionSvc", default="", \
-                        help='The name of a service that can be invoked to decommission IoT \
-                        devices within the ClearBlade Platform or Edge. The default is "".')
+                        The default is "edge/command/response".')
 
     parser.add_argument('--logLevel', dest="logLevel", default="INFO", choices=['CRITICAL', \
                         'ERROR', 'WARNING', 'INFO', 'DEBUG'], help='The level of logging that \
@@ -90,36 +60,39 @@ def parse_args(argv):
 
 # System credentials
 CB_CONFIG = parse_args(sys.argv)
+CB_SYSTEM = System(CB_CONFIG['systemKey'], CB_CONFIG['systemSecret'], CB_CONFIG['httpURL'] + ":" + CB_CONFIG["httpPort"] )
 
-CB_SYSTEM = System(CB_CONFIG['systemKey'], CB_CONFIG['systemSecret'], CB_CONFIG['httpURL'] )
-
-# Log in as Sanket
-#uid = CB_SYSTEM.User("aidemonitor@clearblade.com", "#bubba#")
 uid = CB_SYSTEM.Device(CB_CONFIG['deviceID'], CB_CONFIG['activeKey'])
 
-# Use Sanket to access a messaging client
 mqtt = CB_SYSTEM.Messaging(uid, CB_CONFIG["messagingPort"], keepalive=30)
 
 # Set up callback functions
 def on_connect(client, userdata, flags, rc):
-    # When we connect to the broker, subscribe to the southernplayalisticadillacmuzik channel
     client.subscribe(CB_CONFIG["requestTopicRoot"])
     
 def on_message(client, userdata, message):
-    # When we receive a message, print it out
-    print "Received message '" + message.payload + "' on topic '" + message.topic + "'"
+    message.payload = message.payload.decode()
+    print("Received message '" + message.payload + "' on topic '" + message.topic + "'")
     j=json.loads(message.payload)
     cmd=str(j["command"])
-    #args=str(j["args"])
+    result={}
     try:
-        result= subprocess.check_output(cmd.split())
-    except:
-        result='{"Error": "Error Running " + cmd}'
-    mqtt.publish(CB_CONFIG["responseTopicRoot"], create_response(message, result))
-
+        process = subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        result["stdout"]=process.stdout
+        result["stderr"]=process.stderr
+        result["error"]=False
+    except subprocess.CalledProcessError as e:
+        print("failed to run command")
+        result["stdout"]=e.stdout
+        result["stderr"]=e.stderr
+        result["error"]=True
+    
+    resp={}
+    resp["request"]=j
+    resp["response"]=result
+    mqtt.publish(CB_CONFIG["responseTopicRoot"], json.dumps(resp))
 
 def create_response(request, resp):
-    logging.debug("In create_response")
     message = {}
     message['request'] = request
     message['response'] = resp
