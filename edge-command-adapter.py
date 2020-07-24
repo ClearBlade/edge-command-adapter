@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 from clearblade.ClearBladeCore import System
 import argparse, sys, time, subprocess, logging, json, os
 
@@ -6,7 +5,7 @@ CB_CONFIG = {}
 
 def parse_env_variables(env):
     """Parse environment variables"""
-    possible_vars = ["CB_SYSTEM_KEY", "CB_SYSTEM_SECRET", "CB_EDGE_NAME", "CB_PLATFORM_IP", "CB_EDGE_IP", "CB_ADAPTERS_ROOT_DIR", "CB_SERVICE_ACCOUNT", "CB_SERVICE_ACCOUNT_TOKEN"]
+    possible_vars = ["CB_SYSTEM_KEY", "CB_SYSTEM_SECRET", "CB_SERVICE_ACCOUNT", "CB_SERVICE_ACCOUNT_TOKEN"]
     
     for var in possible_vars:
         if var in env:
@@ -117,6 +116,7 @@ def check_required_config():
         logging.error("Device ID/Active Key or Service Account Name and Token are required")
         exit(-1)
     logging.debug("Adapter Config Looks Good!")
+    logging.debug(CB_CONFIG)
 
 # Parse and Validate all args
 parse_env_variables(os.environ)
@@ -141,6 +141,8 @@ mqtt = CB_SYSTEM.Messaging(uid, CB_CONFIG["messagingPort"], keepalive=30)
 # Set up callback functions
 def on_connect(client, userdata, flags, rc):
     client.subscribe(CB_CONFIG["requestTopicRoot"])
+    client.subscribe(CB_CONFIG["requestTopicRoot"] + "/_broadcast")
+    client.subscribe(CB_CONFIG["requestTopicRoot"] + "/_edge/+")
     
 def on_message(client, userdata, message):
     message.payload = message.payload.decode()
