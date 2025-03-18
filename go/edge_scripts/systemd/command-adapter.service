@@ -1,0 +1,13 @@
+[Unit]
+Description=ClearBlade Edge shell command adapter
+After=network.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/command-adapter -systemKey=8ee8d7eb0b84b69bdd899984b84e -systemSecret=8EE8D7EB0BD69796B1AC9BB5D0CC01 -platformURL=https://community.clearblade.com:443 -messagingURL=community.clearblade.com:1884 -deviceName=edge-command-adapter -password=1234567890 -logLevel=DEBUG -fatalOnDisconnect=true
+User=root
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
